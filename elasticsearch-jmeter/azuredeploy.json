@@ -23,10 +23,11 @@
     },
     "subNodeCount": {
       "type": "int",
-      "defaultValue": 50,
+      "defaultValue": 2,
       "allowedValues": [
         80,
         50,
+        40,
         2,
         3,
         4,
@@ -42,7 +43,7 @@
     },
     "subNodeSize": {
       "type": "string",
-      "defaultValue": "Standard_D3_v2",
+      "defaultValue": "Standard_D4_v2",
       "allowedValues": [
         "Standard_D2_v2",
         "Standard_D3_v2",
@@ -75,14 +76,14 @@
     },
     "testpack": {
       "type": "string",
-      "defaultValue": "https://github.com/jakobhellsten/jmeter-public/raw/master/elasticsearch-jmeter/testpack.zip",
+      "defaultValue": "https://github.com/jakobhellsten/jmeter-public/raw/jmeter-install/elasticsearch-jmeter/testpack.zip",
       "metadata": {
         "description": "The location of the test jmx and run properties. This is extracted to the JMeter master node only, in /opt/jmeter"
       }
     },
     "templateBase": {
       "type": "string",
-      "defaultValue": "https://raw.githubusercontent.com/jakobhellsten/jmeter-public/master",
+      "defaultValue": "https://raw.githubusercontent.com/jakobhellsten/jmeter-public/jmeter-install",
       "metadata": {
         "description": "Change this value to your repo name if deploying from a fork"
       }
@@ -91,9 +92,9 @@
   "variables": {
     "apiVersion": "2015-06-15",
     "templateBaseUrl": "[concat(parameters('templateBase'), '/elasticsearch-jmeter/')]",
-    "storageAccountName": "[concat(substring(uniqueString(resourceGroup().id, 'jmeter'), 0, 6), 'jmeter6')]",
-    "bossNodeIp": "10.0.4.10",
-    "subNodesIpPrefix": "10.0.4.2",
+    "storageAccountName": "[concat(substring(uniqueString(resourceGroup().id, 'jmeter'), 0, 6), 'jmeter7')]",
+    "bossNodeIp": "10.0.4.9",
+    "subNodesIpPrefix": "10.0.4.1",
     "networkSettings": {
       "virtualNetworkName": "[parameters('existingVirtualNetworkName')]",
       "addressPrefix": "10.0.0.0/16",
@@ -115,7 +116,7 @@
       "imageReference": {
         "publisher": "Canonical",
         "offer": "UbuntuServer",
-        "sku": "14.04.2-LTS",
+        "sku": "18.04-LTS",
         "version": "latest"
       },
       "managementPort": "22",
@@ -127,7 +128,7 @@
           "autoUpgradeMinorVersion": true,
           "settings": {
             "fileUris": "[variables('setupScripts')]",
-            "commandToExecute": "[concat('bash jmeter-install.sh -mr ', variables('subNodesIpPrefix'), '-', parameters('subNodeCount'), ' -j ', ' -t ', parameters('testpack'))]"
+            "commandToExecute": "[concat('bash jmeter-install.sh -mr ', variables('subNodesIpPrefix'), '-', parameters('subNodeCount'), ' -t ', parameters('testpack'))]"
           }
         },
         "sub": {

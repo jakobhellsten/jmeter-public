@@ -96,40 +96,80 @@ expand_ip_range() {
 install_java()
 {
     log "Installing Java"
-    add-apt-repository -y ppa:webupd8team/java
-    mkdir -p /var/cache/oracle-jdk8-installer
-    wget -q http://ftp.osuosl.org/pub/funtoo/distfiles/oracle-java/jdk-8u144-linux-x64.tar.gz -O /var/cache/oracle-jdk8-installer/jdk-8u144-linux-x64.tar.gz
-    apt-get -y update
-    echo debconf shared/accepted-oracle-license-v1-1 select true | sudo debconf-set-selections
-    echo debconf shared/accepted-oracle-license-v1-1 seen true | sudo debconf-set-selections
-    apt-get -y install oracle-java8-installer
+    sudo apt update --assume-yes
+    sudo apt install default-jre --assume-yes
 }
 
-install_jmeter_service()
+create_jmeter_startup_script()
 {
-    cat << EOF > /etc/init/jmeter.conf
-    description "JMeter Service"
-
-    start on starting
-    script
-        JVM_ARGS="-Xms1024m -Xmx6144m -XX:NewSize=512m -XX:MaxNewSize=6144m" && export JVM_ARGS && /opt/jmeter/apache-jmeter-3.1/bin/jmeter-server
-    end script
+    cat << EOF > /opt/jmeter/start-jmeter-server.sh
+#!/bin/bash
+sudo -u jmeter Xvfb :1 -screen 5 1024x768x8 &
+export DISPLAY=:1.5
+JVM_ARGS="-Xms1024m -Xmx6144m -XX:NewSize=512m -XX:MaxNewSize=6144m" && export JVM_ARGS && sudo -u jmeter /opt/jmeter/apache-jmeter-5.0/bin/jmeter-server -DChrome_Driver=$(which chromedriver) -Djava.rmi.server.hostname=`ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1'`
 EOF
 
-    chmod +x /etc/init/jmeter.conf
-    service jmeter start
+   chmod +x /opt/jmeter/start-jmeter-server.sh
+   sudo systemctl start jmeter
+}
+
+setup_jmeter_service()
+{   
+    cat << EOF > /etc/systemd/system/jmeter.service
+[Unit]
+Description=JMeter Service
+After=network-online.target
+
+[Service]
+ExecStart=/opt/jmeter/start-jmeter-server.sh
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    sudo systemctl enable jmeter
 }
 
 update_config_sub()
 {
-    mv /opt/jmeter/apache-jmeter-3.1/bin/jmeter.properties /opt/jmeter/apache-jmeter-3.1/bin/jmeter.properties.bak
-    cat /opt/jmeter/apache-jmeter-3.1/bin/jmeter.properties.bak | sed "s|#client.rmi.localport=0|client.rmi.localport=4441|" | sed "s|#server.rmi.localport=4000|server.rmi.localport=4440|" > /opt/jmeter/apache-jmeter-3.1/bin/jmeter.properties 
+    export LANGUAGE=en_US.UTF-8
+    export LC_ALL=en_US.UTF-8
+    export LANG=en_US.UTF-8
+    export LC_TYPE=en_US.UTF-8
+    wget -O /opt/jmeter/apache-jmeter-5.0/bin/rmi_keystore.jks https://github.com/axelavensia/jmeter-public/raw/master/elasticsearch-jmeter/resources/rmi_keystore.jks
+    wget -O /opt/jmeter/apache-jmeter-5.0/bin/user.properties https://github.com/axelavensia/jmeter-public/raw/master/elasticsearch-jmeter/resources/user.properties
+    mv /opt/jmeter/apache-jmeter-5.0/bin/jmeter.properties /opt/jmeter/apache-jmeter-5.0/bin/jmeter.properties.bak
+    #cat /opt/jmeter/apache-jmeter-5.0/bin/jmeter.properties.bak | sed "s|#server.rmi.ssl.disable=false|server.rmi.ssl.disable=true|" > /opt/jmeter/apache-jmeter-5.0/bin/jmeter.properties 
+    #cat /opt/jmeter/apache-jmeter-5.0/bin/jmeter.properties.bak | sed "s|#server.rmi.ssl.disable=false|server.rmi.ssl.disable=false|" | sed "s|#client.rmi.localport=0|client.rmi.localport=4440|" | sed "s|#server.rmi.localport=4000|server.rmi.localport=4441|" | sed "s|#server.rmi.ssl.keystore.type=JKS|server.rmi.ssl.keystore.type=JKS|" | sed "s|#server.rmi.ssl.keystore.file=rmi_keystore.jks|server.rmi.ssl.keystore.file=/opt/jmeter/apache-jmeter-5.0/bin/rmi_keystore.jks|" | sed "s|#server.rmi.ssl.keystore.password=changeit|server.rmi.ssl.keystore.password=changeit|" | sed "s|#server.rmi.ssl.keystore.alias=rmi|server.rmi.ssl.keystore.alias=rmi|" > /opt/jmeter/apache-jmeter-5.0/bin/jmeter.properties
+
+    cat /opt/jmeter/apache-jmeter-5.0/bin/jmeter.properties.bak > /opt/jmeter/apache-jmeter-5.0/bin/jmeter.properties
+
+
+    #| sed "s|#server.rmi.ssl.keystore.type=JKS|server.rmi.ssl.keystore.type=JKS|" | sed "s|#server.rmi.ssl.keystore.file=rmi_keystore.jks|server.rmi.ssl.keystore.file=/opt/jmeter/apache-jmeter-5.0/bin/rmi_keystore.jks|" | sed "s|#server.rmi.ssl.keystore.password=changeit|server.rmi.ssl.keystore.password=changeit|" | sed "s|#server.rmi.ssl.keystore.alias=rmi|server.rmi.ssl.keystore.alias=rmi|" 
+    
+
 }
 
 update_config_boss()
 {
-    mv /opt/jmeter/apache-jmeter-3.1/bin/jmeter.properties /opt/jmeter/apache-jmeter-3.1/bin/jmeter.properties.bak
-    cat /opt/jmeter/apache-jmeter-3.1/bin/jmeter.properties.bak | sed "s|#client.rmi.localport=0|client.rmi.localport=4440|" | sed "s|remote_hosts=127.0.0.1|remote_hosts=${REMOTE_HOSTS}|" > /opt/jmeter/apache-jmeter-3.1/bin/jmeter.properties 
+    export LANGUAGE=en_US.UTF-8
+    export LC_ALL=en_US.UTF-8
+    export LANG=en_US.UTF-8
+    export LC_TYPE=en_US.UTF-8
+    wget -O /opt/jmeter/apache-jmeter-5.0/bin/rmi_keystore.jks https://github.com/siggeb/jmeter-public/raw/master/elasticsearch-jmeter/resources/rmi_keystore.jks
+    wget -O /opt/jmeter/apache-jmeter-5.0/bin/user.properties https://github.com/siggeb/jmeter-public/raw/master/elasticsearch-jmeter/resources/user.properties
+    mv /opt/jmeter/apache-jmeter-5.0/bin/jmeter.properties /opt/jmeter/apache-jmeter-5.0/bin/jmeter.properties.bak
+    #cat /opt/jmeter/apache-jmeter-5.0/bin/jmeter.properties.bak | sed "s|remote_hosts=127.0.0.1|remote_hosts=${REMOTE_HOSTS}|" | sed "s|#server.rmi.ssl.disable=false|server.rmi.ssl.disable=false|" > /opt/jmeter/apache-jmeter-5.0/bin/jmeter.properties 
+
+    #cat /opt/jmeter/apache-jmeter-5.0/bin/jmeter.properties.bak | sed "s|#client.rmi.localport=0|client.rmi.localport=4440|" | sed "s|remote_hosts=127.0.0.1|remote_hosts=${REMOTE_HOSTS}|" | sed "s|#server.rmi.ssl.disable=false|server.rmi.ssl.disable=false|" | sed "s|#server.rmi.ssl.keystore.type=JKS|server.rmi.ssl.keystore.type=JKS|" | sed "s|#server.rmi.ssl.keystore.file=rmi_keystore.jks|server.rmi.ssl.keystore.file=/opt/jmeter/apache-jmeter-5.0/bin/rmi_keystore.jks|" | sed "s|#server.rmi.ssl.keystore.password=changeit|server.rmi.ssl.keystore.password=changeit|" | sed "s|#server.rmi.ssl.keystore.alias=rmi|server.rmi.ssl.keystore.alias=rmi|" > /opt/jmeter/apache-jmeter-5.0/bin/jmeter.properties 
+    
+    cat /opt/jmeter/apache-jmeter-5.0/bin/jmeter.properties.bak | sed "s|remote_hosts=127.0.0.1|remote_hosts=${REMOTE_HOSTS}|" > /opt/jmeter/apache-jmeter-5.0/bin/jmeter.properties 
+
+
+    #| sed "s|#server.rmi.ssl.keystore.type=JKS|server.rmi.ssl.keystore.type=JKS|" | sed "s|#server.rmi.ssl.keystore.file=rmi_keystore.jks|server.rmi.ssl.keystore.file=/opt/jmeter/apache-jmeter-5.0/bin/rmi_keystore.jks|" | sed "s|#server.rmi.ssl.keystore.password=changeit|server.rmi.ssl.keystore.password=changeit|" | sed "s|#server.rmi.ssl.keystore.alias=rmi|server.rmi.ssl.keystore.alias=rmi|" 
+    
+    
+    
 }
 
 install_jmeter()
@@ -138,34 +178,40 @@ install_jmeter()
     apt-get -y install unzip 
     
     mkdir -p /opt/jmeter
-    wget -O jmeter.zip https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-3.1.zip
-    wget -O JMeterPlugins-Standard-1.4.0.zip http://jmeter-plugins.org/downloads/file/JMeterPlugins-Standard-1.4.0.zip
-	wget -O JMeterPlugins-WebDriver-1.4.0.zip http://jmeter-plugins.org/downloads/file/JMeterPlugins-WebDriver-1.4.0.zip
-	wget -O JMeterPlugins-ExtrasLibs-1.4.0.zip https://jmeter-plugins.org/downloads/file/JMeterPlugins-ExtrasLibs-1.4.0.zip
+    wget -O jmeter.zip https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.0.zip
     
     log "unzipping jmeter"
     unzip -q jmeter.zip -d /opt/jmeter/
     
-    log "unzipping plugins"
-    unzip -q JMeterPlugins-Standard-1.4.0.zip -d /opt/jmeter/apache-jmeter-3.1/
-	unzip -q JMeterPlugins-WebDriver-1.4.0.zip -d /opt/jmeter/apache-jmeter-3.1/
-	unzip -q JMeterPlugins-ExtrasLibs-1.4.0.zip -d /opt/jmeter/apache-jmeter-3.1/
-     
-    chmod u+x /opt/jmeter/apache-jmeter-3.1/bin/jmeter-server
-    chmod u+x /opt/jmeter/apache-jmeter-3.1/bin/jmeter
+    log "installing plugins manager"
+    wget -O /opt/jmeter/apache-jmeter-5.0/lib/ext/jmeter-plugins-manager-1.4.jar https://jmeter-plugins.org/get/
+    
+    log "getting test plan"
+    wget -O /opt/jmeter/RNB_POP_preprod_JMeter_ChromeDriver.jmx https://raw.githubusercontent.com/siggeb/jmeter-public/master/elasticsearch-jmeter/resources/RNB_POP_preprod_JMeter_ChromeDriver.jmx
+    
+    log "installing plugins"
+    wget -O /opt/jmeter/apache-jmeter-5.0/lib/cmdrunner-2.2.jar http://search.maven.org/remotecontent?filepath=kg/apc/cmdrunner/2.2/cmdrunner-2.2.jar
+    java -cp /opt/jmeter/apache-jmeter-5.0/lib/ext/jmeter-plugins-manager-1.4.jar org.jmeterplugins.repository.PluginManagerCMDInstaller
+	/opt/jmeter/apache-jmeter-5.0/bin/./PluginsManagerCMD.sh install jpgc-webdriver
+    /opt/jmeter/apache-jmeter-5.0/bin/PluginsManagerCMD.sh install-for-jmx /opt/jmeter/RNB_POP_preprod_JMeter_ChromeDriver.jmx
 
+     
+    chmod u+x /opt/jmeter/apache-jmeter-5.0/bin/jmeter-server
+    chmod u+x /opt/jmeter/apache-jmeter-5.0/bin/jmeter
+    
     
     if [ ${IS_MASTER} -ne 1 ]; 
     then
         log "setting up sub node"
-        iptables -A INPUT -m state --state NEW -m tcp -p tcp --dport 4441 -j ACCEPT
+        iptables -A INPUT -m state --state NEW -m tcp -p tcp --match multiport --dports 1000:5000 -j ACCEPT
         
         update_config_sub
-        install_jmeter_service
+        setup_jmeter_service
+        install_phantomjs
     else
         log "setting up boss node"
-        iptables -A INPUT -p tcp --match multiport --dports 4440:4445 -j ACCEPT
-        iptables -A OUTPUT -p tcp --match multiport --dports 4440:4445 -j ACCEPT
+        iptables -A INPUT -p tcp --match multiport --dports 1000:5000 -j ACCEPT
+        iptables -A OUTPUT -p tcp --match multiport --dports 1000:5000 -j ACCEPT
     
         update_config_boss
         
@@ -184,12 +230,57 @@ install_jmeter()
     useradd -u 999 -g 999 jmeter
     chown -R jmeter: /opt/jmeter
 }
+install_chromedriver()
+{
+    log "Installing chromedriver"
+    #wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+    #sh -c 'echo "deb http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
+    
+    apt-get -y update  > /dev/null
+    apt-get -qy install wget default-jre-headless telnet iputils-ping unzip libnss3  #chromium-chromedriver > /dev/null
+    wget -q https://chromedriver.storage.googleapis.com/85.0.4183.87/chromedriver_linux64.zip #TODO: Add this to repo to avoid future version mismatches
+    unzip chromedriver_linux64.zip
+    sudo mv chromedriver /usr/bin/chromedriver
+    sudo chown root:root /usr/bin/chromedriver
+    sudo chmod +x /usr/bin/chromedriver
+    
+    #apt-get install libxss1 libappindicator1 libindicator7
+    #wget http://security.ubuntu.com/ubuntu/pool/universe/c/chromium-browser/chromium-browser_65.0.3325.181-0ubuntu0.14.04.1_amd64.deb
+    #dpkg -i chromium-browser*.deb
+    #apt-get install -f
+    #dpkg -i chromium-browser*.deb
+    
+    wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb #TODO: Add this to repo to avoid future version mismatches
+	sudo dpkg -i google-chrome-stable_current_amd64.deb
+	sudo apt --fix-broken install --assume-yes
+	
+	#Install xvfb (Headless browsers need it too.)
+    sudo apt install xvfb --assume-yes
+	
+	
+    #dpkg -i google-chrome*.deb
+    #apt-get install -f
+    #dpkg -i google-chrome*.deb
+    
+    #why is this symlink needed? 
+    #sudo ln -s /usr/lib/chromium-browser/chromedriver /usr/bin/chromedriver
+    
+    #log "Installing n"
+    #npm install -g n
+    #npm config set strict-ssl false
+    #n stable
+    #log "Done installing n"
+
+    
+    #npm install -g chromedriver #> /dev/null
+    #ln -s /home/avensia/node_modules/chromedriver/lib/chromedriver/chromedriver /usr/bin
+    log "Chromedriver installed and alias created in /usr/bin"
+}
+
 install_phantomjs()
 {
-    log "Installing phantomjs"
-    apt-get -y update  > /dev/null
-    apt-get -qy install wget default-jre-headless telnet iputils-ping unzip nodejs-legacy npm  > /dev/null
-	npm install -g phantomjs > /dev/null
+    sudo apt --fix-broken install --assume-yes
+	sudo apt install phantomjs --assume-yes
 }
 
 
@@ -201,7 +292,8 @@ then
 fi
 
 install_java
-install_phantomjs
+install_chromedriver
 install_jmeter
+create_jmeter_startup_script
 
 log "script complete"
